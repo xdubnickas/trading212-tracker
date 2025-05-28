@@ -1,0 +1,47 @@
+/* Footer Component Styles */
+
+.landing-footer {
+  background: linear-gradient(135deg, var(--trading212-dark) 0%, var(--trading212-black) 100%);
+  color: var(--trading212-white);
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--trading212-blue), transparent);
+}
+
+.tech-badge {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 50px !important;
+}
+
+.tech-badge:hover {
+  background: var(--trading212-blue) !important;
+  color: var(--trading212-white) !important;
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 15px rgba(0, 167, 225, 0.4);
+}
+
+.footer-demo-btn {
+  transition: all 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(10px);
+}
+
+.footer-demo-btn:hover {
+  background: var(--trading212-blue) !important;
+  border-color: var(--trading212-blue) !important;
+  color: var(--trading212-white) !important;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 167, 225, 0.4);
+}

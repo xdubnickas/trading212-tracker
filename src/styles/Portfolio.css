@@ -1,0 +1,102 @@
+/* Trading212 Portfolio Dashboard Styles */
+
+/* Performance Summary Cards */
+.performance-card {
+  transition: transform 0.2s ease-in-out;
+  border-radius: 1rem;
+}
+
+.performance-card:hover {
+  transform: translateY(-4px);
+}
+
+.bg-primary {
+  background: linear-gradient(135deg, var(--trading212-blue), var(--trading212-blue-dark)) !important;
+}
+
+.bg-success {
+  background: linear-gradient(135deg, var(--trading212-success), #1e7e34) !important;
+}
+
+.bg-danger {
+  background: linear-gradient(135deg, var(--trading212-danger), #c82333) !important;
+}
+
+/* Chart Containers */
+.chart-container {
+  position: relative;
+  padding: 1rem;
+}
+
+.chart-card {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.chart-card .card-header {
+  background: linear-gradient(135deg, var(--trading212-blue), var(--trading212-blue-dark));
+  color: var(--trading212-white);
+  border: none;
+}
+
+/* Table Styling */
+.table-hover tbody tr:hover {
+  background-color: rgba(0, 167, 225, 0.05);
+}
+
+.positions-table {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.positions-table .table {
+  margin-bottom: 0;
+}
+
+.positions-table .table thead th {
+  background: var(--trading212-blue);
+  color: var(--trading212-white);
+  border: none;
+  font-weight: 600;
+}
+
+/* Custom scrollbar for tables */
+.table-responsive::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: var(--trading212-light);
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: var(--trading212-blue);
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: var(--trading212-blue-dark);
+}
+
+/* Status Bar */
+.status-bar {
+  background: var(--trading212-white);
+  border: 1px solid rgba(0, 167, 225, 0.1);
+  border-radius: 0.75rem;
+}
+
+/* Alert Overrides */
+.alert-danger {
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  color: var(--trading212-danger);
+  border-radius: 0.75rem;
+}
+
+.alert-info {
+  background: rgba(0, 167, 225, 0.1);
+  border: 1px solid rgba(0, 167, 225, 0.2);
+  color: var(--trading212-blue-dark);
+  border-radius: 0.75rem;
+}

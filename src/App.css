@@ -1,0 +1,234 @@
+/* Trading212 Portfolio App - Base Styles */
+
+/* Trading212 Brand Colors */
+:root {
+  --trading212-black: #000000;
+  --trading212-blue: #00a7e1;
+  --trading212-dark: #181a1b;
+  --trading212-light: #e3ecef;
+  --trading212-accent: #00a7e1;
+  --trading212-success: #28a745;
+  --trading212-danger: #dc3545;
+  --trading212-warning: #ffc107;
+  
+  /* Extended palette */
+  --trading212-blue-dark: #0085b3;
+  --trading212-blue-light: #33b8e8;
+  --trading212-gray: #6c757d;
+  --trading212-gray-light: #f8f9fa;
+  --trading212-white: #ffffff;
+}
+
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--trading212-light);
+  width: 100%;
+  color: var(--trading212-dark);
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Base Card Styling */
+.card {
+  border: none;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  border-radius: 0.75rem;
+  transition: all 0.15s ease-in-out;
+  background: var(--trading212-white);
+  overflow: hidden;
+}
+
+.card:hover {
+  box-shadow: 0 0.5rem 1rem rgba(0, 167, 225, 0.15);
+  transform: translateY(-2px);
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+/* Global Button Overrides */
+.btn {
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--trading212-blue), var(--trading212-blue-dark));
+  border: none;
+  color: var(--trading212-white);
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background: linear-gradient(135deg, var(--trading212-blue-dark), var(--trading212-blue)) !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(0, 167, 225, 0.3) !important;
+  transform: translateY(-2px);
+  color: var(--trading212-white) !important;
+}
+
+.btn-outline-primary {
+  border: 2px solid var(--trading212-blue);
+  color: var(--trading212-blue);
+  background: transparent;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:active {
+  background: var(--trading212-blue) !important;
+  border-color: var(--trading212-blue) !important;
+  color: var(--trading212-white) !important;
+  transform: translateY(-2px);
+}
+
+.btn-success {
+  background: var(--trading212-success);
+  border: none;
+}
+
+.btn-success:hover,
+.btn-success:focus,
+.btn-success:active {
+  background: #218838 !important;
+  border: none !important;
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: var(--trading212-danger);
+  border: none;
+}
+
+.btn-danger:hover,
+.btn-danger:focus,
+.btn-danger:active {
+  background: #c82333 !important;
+  border: none !important;
+  transform: translateY(-2px);
+}
+
+/* Text Colors */
+.text-positive {
+  color: var(--trading212-success) !important;
+}
+
+.text-negative {
+  color: var(--trading212-danger) !important;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  width: 3rem;
+  height: 3rem;
+  color: var(--trading212-blue);
+}
+
+/* Global Utility Classes */
+.container-fluid {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Container fixes */
+.container,
+.container-fluid {
+  width: 100%;
+  padding-left: 15px;
+  padding-right: 15px;
+  margin-left: auto;
+  margin-right: auto;
+  overflow-x: hidden;
+  justify-items: center;
+}
+
+/* Row fixes */
+.row {
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
+}
+
+.row.g-4 {
+  --bs-gutter-x: 1.5rem;
+  --bs-gutter-y: 1.5rem;
+}
+
+/* Column flex fix */
+.d-flex.flex-column {
+  height: 100%;
+}
+
+/* Text improvements */
+.text-center {
+  text-align: center !important;
+}
+
+/* Mobile first approach */
+@media (max-width: 575.98px) {
+  .container {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  
+  .row {
+    margin-left: -10px;
+    margin-right: -10px;
+  }
+  
+  .col,
+  [class*="col-"] {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 576px) and (max-width: 991.98px) {
+  .container {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+}
+
+/* Desktop adjustments */
+@media (min-width: 992px) {
+  .container {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+}
+
+/* Responsive spacing */
+@media (max-width: 991.98px) {
+  .row.g-4 {
+    --bs-gutter-y: 2rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .row.g-4 {
+    --bs-gutter-y: 1.5rem;
+  }
+  
+  .card-body {
+    padding: 1.25rem;
+  }
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}

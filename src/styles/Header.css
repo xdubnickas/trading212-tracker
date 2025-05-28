@@ -1,0 +1,40 @@
+/* Trading212 Header Styles */
+
+.navbar-brand {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--trading212-white) !important;
+}
+
+.navbar-dark {
+  background: linear-gradient(135deg, var(--trading212-black), var(--trading212-dark)) !important;
+}
+
+/* Dropdown Overrides */
+.dropdown-menu {
+  border: 1px solid rgba(0, 167, 225, 0.1);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 30px rgba(0, 167, 225, 0.1);
+}
+
+.dropdown-item:hover {
+  background: rgba(0, 167, 225, 0.1);
+  color: var(--trading212-blue-dark);
+}
+
+/* Input Group Fixes */
+.input-group .btn {
+  border-color: var(--trading212-light);
+}
+
+.input-group .btn:hover {
+  background: var(--trading212-blue);
+  border-color: var(--trading212-blue);
+  color: var(--trading212-white);
+}
+
+/* Badge Styling */
+.badge {
+  border-radius: 0.5rem;
+  font-weight: 500;
+}
