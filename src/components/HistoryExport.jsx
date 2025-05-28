@@ -96,7 +96,7 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
     try {
       const reports = []
       const successfulReportIds = []
-      let baseDelay = 10000 // Start with 10 seconds between requests
+      let baseDelay = 20000 // Start with 10 seconds between requests
 
       for (let i = 0; i < years.length; i++) {
         const year = years[i]
