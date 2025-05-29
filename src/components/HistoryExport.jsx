@@ -1,11 +1,13 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Trading212Service from '../services/Trading212Service'
 
 const HistoryExport = ({ apiKey, onExportComplete }) => {
   const [startYear, setStartYear] = useState(new Date().getFullYear() - 1)
   const [isExporting, setIsExporting] = useState(false)
+  const [isLoadingExisting, setIsLoadingExisting] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0, currentYear: null, status: '' })
   const [exportedReports, setExportedReports] = useState([])
+  const [existingExports, setExistingExports] = useState([])
   const [error, setError] = useState(null)
 
   const getCurrentYear = () => new Date().getFullYear()
@@ -68,6 +70,111 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
     }
   }
 
+  // Load existing exports on component mount
+  useEffect(() => {
+    if (apiKey) {
+      loadExistingExports()
+    }
+  }, [apiKey])
+
+  const loadExistingExports = async () => {
+    if (!apiKey) return
+
+    setIsLoadingExisting(true)
+    setError(null)
+
+    try {
+      console.log('🔄 [HISTORY EXPORT] Loading existing exports (SINGLE REQUEST)...')
+      const service = new Trading212Service(apiKey)
+      const exports = await service.getExportHistory()
+      
+      console.log(`✅ [HISTORY EXPORT] Found ${exports.length} existing exports (NO MORE REQUESTS)`)
+      setExistingExports(exports || [])
+      
+      // Extract and pass existing full-year report IDs to parent
+      const fullYearReportIds = exports
+        .filter(exp => {
+          const isFinished = exp.status?.toLowerCase() === 'finished'
+          const hasReportId = exp.reportId
+          const isFullYear = getYearFromTimeRange(exp.timeFrom, exp.timeTo) !== null
+          return isFinished && hasReportId && isFullYear
+        })
+        .map(exp => exp.reportId)
+      
+      if (fullYearReportIds.length > 0 && onExportComplete) {
+        console.log(`📤 [HISTORY EXPORT] Passing ${fullYearReportIds.length} existing full-year report IDs to parent:`, fullYearReportIds)
+        onExportComplete(fullYearReportIds)
+      }
+      
+    } catch (error) {
+      console.error('❌ [HISTORY EXPORT] Failed to load existing exports:', error)
+      setError(`Failed to load existing exports: ${error.message}`)
+    } finally {
+      setIsLoadingExisting(false)
+    }
+  }
+
+  const getYearFromTimeRange = (timeFrom, timeTo) => {
+    try {
+      const fromDate = new Date(timeFrom)
+      const toDate = new Date(timeTo)
+      const fromYear = fromDate.getFullYear()
+      const toYear = toDate.getFullYear()
+      
+      // Check for exact full-year exports: January 1st to December 31st
+      const isExactFullYear = (
+        fromYear === toYear && // Same year
+        fromDate.getMonth() === 0 && fromDate.getDate() === 1 && // Starts January 1st
+        fromDate.getHours() === 0 && fromDate.getMinutes() === 0 && fromDate.getSeconds() === 0 && // Starts at midnight
+        toDate.getMonth() === 11 && toDate.getDate() === 31 && // Ends December 31st
+        toDate.getHours() === 23 && toDate.getMinutes() === 59 // Ends at 23:59 (any seconds 55-59 are OK)
+        // Removed strict seconds check - Trading212 uses different second values (55, 59)
+      )
+      
+      // Special case for current year - accept if it starts Jan 1st and goes to current date/time
+      const isCurrentYearPartial = (
+        fromYear === getCurrentYear() && toYear === getCurrentYear() &&
+        fromDate.getMonth() === 0 && fromDate.getDate() === 1 && // Starts January 1st
+        fromDate.getHours() === 0 && fromDate.getMinutes() === 0 && fromDate.getSeconds() === 0 // Starts at midnight
+      )
+      
+      if (isExactFullYear || isCurrentYearPartial) {
+        console.log(`✅ [HISTORY EXPORT] Found full-year export for ${fromYear}: ${timeFrom} to ${timeTo}`)
+        return fromYear
+      }
+      
+      console.log(`⚠️ [HISTORY EXPORT] Skipping partial/custom export: ${timeFrom} to ${timeTo}`)
+      console.log(`🔍 [HISTORY EXPORT] Debug - fromYear: ${fromYear}, toYear: ${toYear}, fromMonth: ${fromDate.getMonth()}, fromDate: ${fromDate.getDate()}, toMonth: ${toDate.getMonth()}, toDate: ${toDate.getDate()}, toHours: ${toDate.getHours()}, toMinutes: ${toDate.getMinutes()}, toSeconds: ${toDate.getSeconds()}`)
+      return null
+    } catch (error) {
+      console.error('❌ [HISTORY EXPORT] Error parsing date range:', error)
+      return null
+    }
+  }
+
+  const getExistingYearsCovered = () => {
+    const coveredYears = new Set()
+    const yearToReportIdMap = new Map()
+    
+    console.log('🔍 [HISTORY EXPORT] Analyzing existing exports for full-year coverage...')
+    
+    existingExports
+      .filter(exp => exp.status?.toLowerCase() === 'finished')
+      .forEach(exp => {
+        const year = getYearFromTimeRange(exp.timeFrom, exp.timeTo)
+        if (year) {
+          coveredYears.add(year)
+          yearToReportIdMap.set(year, exp.reportId)
+          console.log(`📋 [HISTORY EXPORT] Year ${year} already covered by Report ID: ${exp.reportId}`)
+        }
+      })
+    
+    const years = Array.from(coveredYears).sort((a, b) => a - b)
+    console.log(`📊 [HISTORY EXPORT] Full years already covered: ${years.join(', ') || 'none'}`)
+    
+    return { years, yearToReportIdMap }
+  }
+
   const handleExportHistory = async () => {
     if (!apiKey) {
       setError('No API key provided')
@@ -79,27 +186,74 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
       return
     }
 
+    // First, load fresh existing exports data
+    console.log('🔄 [HISTORY EXPORT] Refreshing existing exports before starting...')
+    await loadExistingExports()
+
     setIsExporting(true)
     setError(null)
     setExportedReports([])
 
     const currentYear = getCurrentYear()
-    const years = []
+    const requestedYears = []
     
     // Generate array of years from startYear to current year
     for (let year = startYear; year <= currentYear; year++) {
-      years.push(year)
+      requestedYears.push(year)
     }
 
-    setProgress({ current: 0, total: years.length, currentYear: null, status: 'Starting export...' })
+    // Check which years are already covered
+    const { years: existingYears, yearToReportIdMap } = getExistingYearsCovered()
+    const yearsToExport = requestedYears.filter(year => !existingYears.includes(year))
+    
+    console.log(`📊 [HISTORY EXPORT] Requested years: ${requestedYears.join(', ')}`)
+    console.log(`✅ [HISTORY EXPORT] Already covered years: ${existingYears.join(', ') || 'none'}`)
+    console.log(`🆕 [HISTORY EXPORT] Years to export: ${yearsToExport.join(', ') || 'none'}`)
+
+    // Collect existing report IDs for covered years
+    const existingReportIds = requestedYears
+      .filter(year => existingYears.includes(year))
+      .map(year => yearToReportIdMap.get(year))
+      .filter(Boolean)
+
+    console.log(`📋 [HISTORY EXPORT] Using existing report IDs: ${existingReportIds.join(', ') || 'none'}`)
+
+    if (yearsToExport.length === 0) {
+      setProgress({ 
+        current: 0, 
+        total: 0, 
+        currentYear: null, 
+        status: `All requested years (${requestedYears.join(', ')}) are already exported!` 
+      })
+      
+      // Pass existing report IDs to parent even if no new exports needed
+      if (existingReportIds.length > 0 && onExportComplete) {
+        console.log(`📤 [HISTORY EXPORT] Passing ${existingReportIds.length} existing report IDs to parent:`, existingReportIds)
+        onExportComplete(existingReportIds)
+      }
+      
+      setTimeout(() => {
+        setProgress({ current: 0, total: 0, currentYear: null, status: '' })
+        setIsExporting(false)
+      }, 3000)
+      
+      return
+    }
+
+    setProgress({ 
+      current: 0, 
+      total: yearsToExport.length, 
+      currentYear: null, 
+      status: `Found ${existingYears.length} existing exports. Need to export ${yearsToExport.length} new years.` 
+    })
 
     try {
       const reports = []
       const successfulReportIds = []
-      let baseDelay = 20000 // Start with 10 seconds between requests
+      let baseDelay = 20000 // Start with 20 seconds between requests
 
-      for (let i = 0; i < years.length; i++) {
-        const year = years[i]
+      for (let i = 0; i < yearsToExport.length; i++) {
+        const year = yearsToExport[i]
         setProgress(prev => ({ 
           ...prev, 
           current: i + 1, 

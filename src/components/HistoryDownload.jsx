@@ -342,6 +342,8 @@ const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
 
   const filteredExports = getFilteredExports()
 
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
   return (
     <div className="history-download-container">
       <div className="history-download-card">
