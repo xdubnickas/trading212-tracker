@@ -1,7 +1,7 @@
 import axios from 'axios'
 
-// Trading212 API Base Configuration - using proxy in development
-const API_BASE_URL = import.meta.env.DEV ? '/api' : 'https://live.trading212.com/api/v0'
+// Trading212 API Base Configuration - always use proxy for CORS
+const API_BASE_URL = '/api'
 
 class Trading212Service {
   constructor(apiKey) {
