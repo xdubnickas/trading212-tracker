@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import Trading212Service from '../services/Trading212Service'
 
-const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
+const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoaded }) => {
   const [exports, setExports] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -10,13 +10,88 @@ const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
   const [csvStats, setCsvStats] = useState(null)
   const [pollingStatus, setPollingStatus] = useState({ active: false, message: '', reportId: null })
 
+  // Helper function to extract year from export
+  const getYearFromExport = (exportItem) => {
+    if (!exportItem?.timeFrom) return null
+    
+    try {
+      const fromDate = new Date(exportItem.timeFrom)
+      const toDate = new Date(exportItem.timeTo)
+      
+      const fromYear = fromDate.getUTCFullYear()
+      const toYear = toDate.getUTCFullYear()
+      const fromMonth = fromDate.getUTCMonth()
+      const fromDay = fromDate.getUTCDate()
+      const fromHour = fromDate.getUTCHours()
+      const fromMinute = fromDate.getUTCMinutes()
+      const fromSecond = fromDate.getUTCSeconds()
+      
+      const toMonth = toDate.getUTCMonth()
+      const toDay = toDate.getUTCDate()
+      
+      // Check for full-year exports: January 1st to December 31st OR current year partial
+      const isValidFullYear = (
+        fromYear === toYear && // Same year
+        fromMonth === 0 && fromDay === 1 && // Starts January 1st
+        fromHour === 0 && fromMinute === 0 && fromSecond === 0 && // Starts at midnight UTC
+        (toMonth === 11 && toDay === 31) // Ends December 31st (any time is OK)
+      )
+      
+      // Special case for current year - accept if it starts Jan 1st
+      const isCurrentYearExport = (
+        fromYear === new Date().getFullYear() && toYear === new Date().getFullYear() &&
+        fromMonth === 0 && fromDay === 1 && // Starts January 1st
+        fromHour === 0 && fromMinute === 0 && fromSecond === 0 // Starts at midnight UTC
+      )
+      
+      if (isValidFullYear || isCurrentYearExport) {
+        return fromYear
+      }
+      
+      return null
+    } catch (error) {
+      console.error('❌ [HISTORY DOWNLOAD] Error parsing export date range:', error)
+      return null
+    }
+  }
+
   useEffect(() => {
-    // Auto-fetch when reportIds are provided
-    if (reportIds.length > 0) {
-      console.log('📥 [HISTORY DOWNLOAD] Auto-fetching exports for report IDs:', reportIds)
+    // Use existing export data instead of making API calls
+    if (exportData.length > 0) {
+      console.log('📥 [HISTORY DOWNLOAD] Using existing export data, no API call needed:', exportData.length, 'exports')
+      
+      // Merge with existing exports but keep only one per year (latest)
+      setExports(prev => {
+        const mergedExports = [...prev]
+        
+        exportData.forEach(newExport => {
+          const existingIndex = mergedExports.findIndex(exp => {
+            const existingYear = getYearFromExport(exp)
+            const newYear = getYearFromExport(newExport)
+            return existingYear === newYear && existingYear !== null
+          })
+          
+          if (existingIndex !== -1) {
+            // Replace existing export for this year with newer one
+            console.log(`🔄 [HISTORY DOWNLOAD] Replacing existing export for year ${getYearFromExport(newExport)} with newer one: ${newExport.reportId}`)
+            mergedExports[existingIndex] = newExport
+          } else {
+            // Add new export for year that doesn't exist
+            console.log(`➕ [HISTORY DOWNLOAD] Adding new export for year ${getYearFromExport(newExport)}: ${newExport.reportId}`)
+            mergedExports.push(newExport)
+          }
+        })
+        
+        console.log(`📊 [HISTORY DOWNLOAD] Final exports count: ${mergedExports.length} (max 1 per year)`)
+        return mergedExports
+      })
+      
+      processCsvData(exportData)
+    } else if (reportIds.length > 0) {
+      console.log('📥 [HISTORY DOWNLOAD] Have report IDs but no export data, fetching from API:', reportIds)
       fetchExportHistory()
     }
-  }, [reportIds, apiKey])
+  }, [exportData, reportIds, apiKey])
 
   const fetchExportHistory = async () => {
     if (!apiKey) {
@@ -41,7 +116,12 @@ const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
       }
     } catch (err) {
       console.error('❌ [HISTORY DOWNLOAD] Failed to fetch export history:', err)
-      setError(`Error: ${err.response?.status || 'Unknown'} - ${err.message}`)
+      
+      if (err.response?.status === 429) {
+        setError(`Rate limit exceeded (429) - Too many requests sent too quickly. Trading212 servers are protecting against overload. Please wait 2-3 minutes before refreshing.`)
+      } else {
+        setError(`Error: ${err.response?.status || 'Unknown'} - ${err.message}`)
+      }
     } finally {
       setLoading(false)
     }
@@ -95,6 +175,11 @@ const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
       } catch (error) {
         console.error(`❌ [HISTORY DOWNLOAD] Error checking export ${reportId} status:`, error)
         setPollingStatus({ active: false, message: '', reportId: null })
+        
+        if (error.response?.status === 429) {
+          throw new Error(`Rate limit exceeded (429) - Too many status checks sent too quickly. Trading212 servers need a break. Will automatically retry with longer delays.`)
+        }
+        
         throw error
       }
     }
@@ -109,32 +194,26 @@ const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
     setCsvStats(null)
 
     try {
-      console.log('📊 [HISTORY DOWNLOAD] Processing CSV data for report IDs:', reportIds)
+      console.log('📊 [HISTORY DOWNLOAD] Processing CSV data from export data:', exportsList.length, 'exports')
       
-      // Filter exports to only our report IDs
-      let targetExports = exportsList.filter(exp => reportIds.includes(exp.reportId))
+      // Use exportsList directly - these should already be filtered full-year exports
+      let targetExports = exportsList
       
-      console.log(`📋 [HISTORY DOWNLOAD] Found ${targetExports.length} target exports`)
-      
-      // Wait for any processing exports to complete
-      const updatedExports = []
-      for (const exportItem of targetExports) {
-        if (exportItem.status?.toLowerCase() === 'processing') {
-          try {
-            console.log(`⏳ [HISTORY DOWNLOAD] Export ${exportItem.reportId} is processing, waiting for completion...`)
-            const completedExport = await waitForExportCompletion(exportItem.reportId)
-            updatedExports.push(completedExport)
-          } catch (error) {
-            console.error(`❌ [HISTORY DOWNLOAD] Failed to wait for export ${exportItem.reportId}:`, error)
-            updatedExports.push(exportItem) // Keep original even if failed
-          }
-        } else {
-          updatedExports.push(exportItem)
-        }
+      // If we still have reportIds for backward compatibility, filter by them
+      if (reportIds.length > 0 && exportData.length === 0) {
+        console.log('📋 [HISTORY DOWNLOAD] Filtering by report IDs for backward compatibility:', reportIds)
+        targetExports = exportsList.filter(exp => reportIds.includes(exp.reportId))
       }
       
+      console.log(`📋 [HISTORY DOWNLOAD] Processing ${targetExports.length} target exports`)
+      
+      // Log what we're processing
+      targetExports.forEach(exp => {
+        console.log(`📅 [HISTORY DOWNLOAD] Export ${exp.reportId}: ${exp.timeFrom} to ${exp.timeTo} (${exp.status})`)
+      })
+
       // Now filter only finished exports with download links
-      const finishedExports = updatedExports.filter(exp => 
+      const finishedExports = targetExports.filter(exp => 
         exp.status?.toLowerCase() === 'finished' && exp.downloadLink
       )
       
@@ -209,17 +288,7 @@ const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
         onCsvDataLoaded(allCsvData)
       }
       
-      // Update exports list with completed ones
-      setExports(prev => {
-        const updated = [...prev]
-        updatedExports.forEach(updatedExport => {
-          const index = updated.findIndex(exp => exp.reportId === updatedExport.reportId)
-          if (index !== -1) {
-            updated[index] = updatedExport
-          }
-        })
-        return updated
-      })
+      // Don't update exports list here to avoid duplicates - it's already managed in useEffect
       
     } catch (error) {
       console.error('❌ [HISTORY DOWNLOAD] CSV processing failed:', error)
@@ -357,8 +426,20 @@ const HistoryDownload = ({ apiKey, reportIds = [], onCsvDataLoaded }) => {
           </p>
         </div>
 
-        {/* Report IDs Display */}
-        {reportIds.length > 0 && (
+        {/* Report Data Display */}
+        {exportData.length > 0 && (
+          <div className="alert alert-info d-flex align-items-center mb-3">
+            <i className="bi bi-info-circle me-2"></i>
+            <div>
+              <strong>Using existing export data ({exportData.length} export(s))</strong>
+              <br />
+              <small>No additional API calls needed - data received from export process</small>
+            </div>
+          </div>
+        )}
+
+        {/* Report IDs Display - only show if no exportData */}
+        {reportIds.length > 0 && exportData.length === 0 && (
           <div className="alert alert-info d-flex align-items-center mb-3">
             <i className="bi bi-info-circle me-2"></i>
             <div>

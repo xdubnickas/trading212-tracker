@@ -32,6 +32,7 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
   const [loading, setLoading] = useState(!initialAccountData)
   const [error, setError] = useState(null)
   const [exportedReportIds, setExportedReportIds] = useState([])
+  const [exportData, setExportData] = useState([])
   const [csvData, setCsvData] = useState([])
   const hasInitialized = useRef(false)
   const serviceRef = useRef(null)
@@ -80,7 +81,7 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
       console.error('❌ [DASHBOARD] Failed to fetch account data:', err)
       
       if (err.response?.status === 429) {
-        setError('Too many requests. Please wait a moment and try again.')
+        setError('Rate limit exceeded (429) - Too many requests sent too quickly to Trading212. This protects their servers from overload. Please wait 20-30 seconds before refreshing.')
       } else {
         setError(`Error: ${err.response?.status || 'Unknown'} - ${err.message}`)
       }
@@ -100,13 +101,84 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
     }, 100)
   }
 
-  const handleExportComplete = (reportIds) => {
-    console.log('📝 [DASHBOARD] Received exported report IDs:', reportIds)
-    setExportedReportIds(prev => {
-      const combined = [...new Set([...prev, ...reportIds])]
-      console.log('📊 [DASHBOARD] Updated report IDs list:', combined)
+  const handleExportComplete = (exportDataArray) => {
+    console.log('📝 [DASHBOARD] Received exported data:', exportDataArray.length, 'exports')
+    
+    setExportData(prev => {
+      const yearMap = new Map()
+      
+      // First, add existing exports to map (keyed by year)
+      prev.forEach(exp => {
+        const year = getYearFromTimeRange(exp.timeFrom, exp.timeTo)
+        if (year !== null) {
+          yearMap.set(year, exp)
+        }
+      })
+      
+      // Then, add/update with new exports (newer ones replace older ones for same year)
+      exportDataArray.forEach(newExport => {
+        const year = getYearFromTimeRange(newExport.timeFrom, newExport.timeTo)
+        if (year !== null) {
+          console.log(`📊 [DASHBOARD] Setting export for year ${year}: ${newExport.reportId}`)
+          yearMap.set(year, newExport)
+        }
+      })
+      
+      const combined = Array.from(yearMap.values())
+      console.log('📊 [DASHBOARD] Updated export data list:', combined.length, 'total exports (max 1 per year)')
       return combined
     })
+
+    // Keep reportIds for backward compatibility
+    const reportIds = exportDataArray.map(exp => exp.reportId)
+    setExportedReportIds(prev => {
+      const combined = [...new Set([...prev, ...reportIds])]
+      return combined
+    })
+  }
+
+  const getYearFromTimeRange = (timeFrom, timeTo) => {
+    if (!timeFrom || !timeTo) return null
+    
+    try {
+      const fromDate = new Date(timeFrom)
+      const toDate = new Date(timeTo)
+      
+      const fromYear = fromDate.getUTCFullYear()
+      const toYear = toDate.getUTCFullYear()
+      const fromMonth = fromDate.getUTCMonth()
+      const fromDay = fromDate.getUTCDate()
+      const fromHour = fromDate.getUTCHours()
+      const fromMinute = fromDate.getUTCMinutes()
+      const fromSecond = fromDate.getUTCSeconds()
+      
+      const toMonth = toDate.getUTCMonth()
+      const toDay = toDate.getUTCDate()
+      
+      // Check for full-year exports
+      const isValidFullYear = (
+        fromYear === toYear && 
+        fromMonth === 0 && fromDay === 1 && 
+        fromHour === 0 && fromMinute === 0 && fromSecond === 0 && 
+        toMonth === 11 && toDay === 31
+      )
+      
+      // Special case for current year
+      const isCurrentYearExport = (
+        fromYear === new Date().getFullYear() && toYear === new Date().getFullYear() &&
+        fromMonth === 0 && fromDay === 1 && 
+        fromHour === 0 && fromMinute === 0 && fromSecond === 0
+      )
+      
+      if (isValidFullYear || isCurrentYearExport) {
+        return fromYear
+      }
+      
+      return null
+    } catch (error) {
+      console.error('❌ [DASHBOARD] Error parsing date range:', error)
+      return null
+    }
   }
 
   const handleCsvDataLoaded = (data) => {
@@ -443,6 +515,7 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
               <HistoryDownload 
                 apiKey={apiKey} 
                 reportIds={exportedReportIds}
+                exportData={exportData}
                 onCsvDataLoaded={handleCsvDataLoaded}
               />
             </div>
@@ -511,6 +584,12 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
                 <>
                   <br />
                   <small>Analyzing {csvData.length} transaction(s)</small>
+                </>
+              )}
+              {exportData.length > 0 && (
+                <>
+                  <br />
+                  <small>Tracking {exportData.length} export report(s)</small>
                 </>
               )}
             </div>

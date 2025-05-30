@@ -374,6 +374,11 @@
   border: 1px solid #fecaca;
 }
 
+.history-export-item.existing {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+}
+
 .history-export-item:last-child {
   margin-bottom: 0;
 }
@@ -389,6 +394,10 @@
 
 .history-export-item.failed .history-export-item-icon {
   color: #dc2626;
+}
+
+.history-export-item.existing .history-export-item-icon {
+  color: #0284c7;
 }
 
 .history-export-item-content {
@@ -843,4 +852,53 @@
   .dashboard-chart-title {
     color: #f8fafc;
   }
+}
+
+/* Suggestions Styles */
+.history-export-suggestions {
+  margin: 1.5rem 0;
+}
+
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--bs-info);
+}
+
+.suggestion-icon {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bs-info);
+  margin-top: 0.125rem;
+}
+
+.suggestion-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.suggestion-message {
+  font-weight: 500;
+  color: var(--bs-body-color);
+  margin-bottom: 0.25rem;
+}
+
+.suggestion-action {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--bs-secondary) !important;
 }
