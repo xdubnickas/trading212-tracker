@@ -4,7 +4,6 @@ import Trading212Service from '../services/Trading212Service'
 const HistoryExport = ({ apiKey, onExportComplete }) => {
   const [startYear, setStartYear] = useState(new Date().getFullYear() - 1)
   const [isExporting, setIsExporting] = useState(false)
-  const [isLoadingExisting, setIsLoadingExisting] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0, currentYear: null, status: '' })
   const [exportedReports, setExportedReports] = useState([])
   const [existingExports, setExistingExports] = useState([])
@@ -86,7 +85,6 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
   const loadExistingExports = async () => {
     if (!apiKey) return
 
-    setIsLoadingExisting(true)
     setError(null)
 
     try {
@@ -140,8 +138,6 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
       } else {
         setError(`Failed to load existing exports: ${error.message}`)
       }
-    } finally {
-      setIsLoadingExisting(false)
     }
   }
 
@@ -224,7 +220,6 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
   }
 
   const isCurrentYearOutdated = (exportEndDate) => {
-    const currentYear = getCurrentYear()
     const today = new Date()
     const exportEnd = new Date(exportEndDate)
     

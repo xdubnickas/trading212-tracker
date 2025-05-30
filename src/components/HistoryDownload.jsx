@@ -5,7 +5,6 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
   const [exports, setExports] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [csvData, setCsvData] = useState([])
   const [processingCsv, setProcessingCsv] = useState(false)
   const [csvStats, setCsvStats] = useState(null)
   const [pollingStatus, setPollingStatus] = useState({ active: false, message: '', reportId: null })
@@ -118,7 +117,7 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
       console.error('❌ [HISTORY DOWNLOAD] Failed to fetch export history:', err)
       
       if (err.response?.status === 429) {
-        setError(`Rate limit exceeded (429) - Too many requests sent too quickly. Trading212 servers are protecting against overload. Please wait 2-3 minutes before refreshing.`)
+        setError(`Rate limit exceeded (429) - Too many requests sent too quickly. Trading212 servers are protecting against overload. Please wait 20-30 seconds before refreshing.`)
       } else {
         setError(`Error: ${err.response?.status || 'Unknown'} - ${err.message}`)
       }
@@ -127,70 +126,9 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
     }
   }
 
-  const waitForExportCompletion = async (reportId, maxAttempts = 30, delayMs = 10000) => {
-    console.log(`⏳ [HISTORY DOWNLOAD] Waiting for export ${reportId} to complete...`)
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        setPollingStatus({
-          active: true,
-          message: `Checking export ${reportId} status... (${attempt}/${maxAttempts})`,
-          reportId
-        })
-
-        console.log(`🔄 [HISTORY DOWNLOAD] Attempt ${attempt}/${maxAttempts} - Checking export ${reportId}`)
-        
-        const service = new Trading212Service(apiKey)
-        const allExports = await service.getExportHistory()
-        const targetExport = allExports.find(exp => exp.reportId === reportId)
-        
-        if (!targetExport) {
-          throw new Error(`Export ${reportId} not found`)
-        }
-        
-        console.log(`📊 [HISTORY DOWNLOAD] Export ${reportId} status: ${targetExport.status}`)
-        
-        if (targetExport.status?.toLowerCase() === 'finished') {
-          console.log(`✅ [HISTORY DOWNLOAD] Export ${reportId} is ready!`)
-          setPollingStatus({ active: false, message: '', reportId: null })
-          return targetExport
-        }
-        
-        if (targetExport.status?.toLowerCase() === 'failed') {
-          throw new Error(`Export ${reportId} failed on Trading212 servers`)
-        }
-        
-        // Still processing, wait before next check
-        if (attempt < maxAttempts) {
-          const waitTime = delayMs / 1000
-          console.log(`⏳ [HISTORY DOWNLOAD] Export ${reportId} still processing, waiting ${waitTime}s before retry...`)
-          setPollingStatus({
-            active: true,
-            message: `Export ${reportId} still processing, waiting ${waitTime}s... (${attempt}/${maxAttempts})`,
-            reportId
-          })
-          await delay(delayMs)
-        }
-        
-      } catch (error) {
-        console.error(`❌ [HISTORY DOWNLOAD] Error checking export ${reportId} status:`, error)
-        setPollingStatus({ active: false, message: '', reportId: null })
-        
-        if (error.response?.status === 429) {
-          throw new Error(`Rate limit exceeded (429) - Too many status checks sent too quickly. Trading212 servers need a break. Will automatically retry with longer delays.`)
-        }
-        
-        throw error
-      }
-    }
-    
-    setPollingStatus({ active: false, message: '', reportId: null })
-    throw new Error(`Export ${reportId} did not complete after ${maxAttempts} attempts (${(maxAttempts * delayMs) / 60000} minutes)`)
-  }
 
   const processCsvData = async (exportsList) => {
     setProcessingCsv(true)
-    setCsvData([])
     setCsvStats(null)
 
     try {
@@ -272,7 +210,6 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
         return 0
       })
 
-      setCsvData(allCsvData)
       setCsvStats({
         totalTransactions,
         totalReports: finishedExports.length,
@@ -365,24 +302,7 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
     return exports.filter(exp => reportIds.includes(exp.reportId))
   }
 
-  const handleDownload = async (downloadLink, reportId, timeFrom, timeTo) => {
-    try {
-      console.log(`📥 [HISTORY DOWNLOAD] Downloading report ${reportId}...`)
-      
-      // Create a temporary link and trigger download
-      const link = document.createElement('a')
-      link.href = downloadLink
-      link.download = `trading212_export_${reportId}_${timeFrom.split('T')[0]}_to_${timeTo.split('T')[0]}.csv`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
-      console.log(`✅ [HISTORY DOWNLOAD] Download started for report ${reportId}`)
-    } catch (error) {
-      console.error(`❌ [HISTORY DOWNLOAD] Download failed for report ${reportId}:`, error)
-      setError(`Download failed: ${error.message}`)
-    }
-  }
+  // Removed unused handleDownload function
 
   const getStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
@@ -411,7 +331,8 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
 
   const filteredExports = getFilteredExports()
 
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+  // Removing unused function
+  // const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
   return (
     <div className="history-download-container">
