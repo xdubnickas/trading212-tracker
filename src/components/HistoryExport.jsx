@@ -95,7 +95,7 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
       console.log(`✅ [HISTORY EXPORT] Found ${exports.length} existing exports (NO MORE REQUESTS)`)
       setExistingExports(exports || [])
       
-      // Extract and pass existing full-year export data to parent (ONE PER YEAR)
+      // Extract and pass existing full-year export data to parent (ONE PER YEAR - LATEST ONLY)
       const fullYearExportsMap = new Map()
       const outdatedExports = []
       
@@ -108,15 +108,38 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
         })
         .forEach(exp => {
           const yearResult = getYearFromTimeRange(exp.timeFrom, exp.timeTo)
-          if (yearResult && !fullYearExportsMap.has(yearResult.year)) {
-            console.log(`📅 [HISTORY EXPORT] Adding full-year export for ${yearResult.year}: ${exp.reportId} (${exp.timeFrom} to ${exp.timeTo})`)
-            fullYearExportsMap.set(yearResult.year, exp)
+          if (yearResult) {
+            const existingExportForYear = fullYearExportsMap.get(yearResult.year)
             
-            if (yearResult.isOutdated) {
-              outdatedExports.push({ year: yearResult.year, reportId: exp.reportId, endDate: exp.timeTo })
+            if (!existingExportForYear) {
+              // First export for this year
+              console.log(`📅 [HISTORY EXPORT] Adding full-year export for ${yearResult.year}: ${exp.reportId} (${exp.timeFrom} to ${exp.timeTo})`)
+              fullYearExportsMap.set(yearResult.year, exp)
+              
+              if (yearResult.isOutdated) {
+                outdatedExports.push({ year: yearResult.year, reportId: exp.reportId, endDate: exp.timeTo })
+              }
+            } else {
+              // Compare end dates to keep the most recent one
+              const existingEndDate = new Date(existingExportForYear.timeTo)
+              const newEndDate = new Date(exp.timeTo)
+              
+              if (newEndDate > existingEndDate) {
+                console.log(`🔄 [HISTORY EXPORT] Replacing export for ${yearResult.year}: ${existingExportForYear.reportId} with newer ${exp.reportId} (${exp.timeTo} is newer than ${existingExportForYear.timeTo})`)
+                fullYearExportsMap.set(yearResult.year, exp)
+                
+                // Update outdated exports list
+                const outdatedIndex = outdatedExports.findIndex(o => o.year === yearResult.year)
+                if (outdatedIndex !== -1) {
+                  outdatedExports.splice(outdatedIndex, 1)
+                }
+                if (yearResult.isOutdated) {
+                  outdatedExports.push({ year: yearResult.year, reportId: exp.reportId, endDate: exp.timeTo })
+                }
+              } else {
+                console.log(`⚠️ [HISTORY EXPORT] Skipping older export for year ${yearResult.year}: ${exp.reportId} (${exp.timeTo} is older than existing ${existingExportForYear.timeTo})`)
+              }
             }
-          } else if (yearResult) {
-            console.log(`⚠️ [HISTORY EXPORT] Skipping duplicate year ${yearResult.year}: ${exp.reportId} (already have ${fullYearExportsMap.get(yearResult.year).reportId})`)
           }
         })
       
@@ -126,7 +149,7 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
       const fullYearExports = Array.from(fullYearExportsMap.values())
       
       if (fullYearExports.length > 0 && onExportComplete) {
-        console.log(`📤 [HISTORY EXPORT] Passing ${fullYearExports.length} unique full-year exports to parent:`, fullYearExports.map(e => `${getYearFromTimeRange(e.timeFrom, e.timeTo)?.year}: ${e.reportId}`))
+        console.log(`📤 [HISTORY EXPORT] Passing ${fullYearExports.length} unique full-year exports to parent (ONE PER YEAR):`, fullYearExports.map(e => `${getYearFromTimeRange(e.timeFrom, e.timeTo)?.year}: ${e.reportId} (${e.timeTo})`))
         onExportComplete(fullYearExports)
       }
       
@@ -134,7 +157,7 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
       console.error('❌ [HISTORY EXPORT] Failed to load existing exports:', error)
       
       if (error.response?.status === 429) {
-        setError(`Rate limit exceeded (429) - Too many requests sent too quickly. Trading212 servers need a break. Please wait 2-3 minutes before trying again.`)
+        setError(`Rate limit exceeded (429) - Too many requests sent too quickly. Trading212 servers need a break. Please wait 20-30 seconds before trying again.`)
       } else {
         setError(`Failed to load existing exports: ${error.message}`)
       }
@@ -237,27 +260,48 @@ const HistoryExport = ({ apiKey, onExportComplete }) => {
   const getExistingYearsCovered = () => {
     const coveredYears = new Set()
     const yearToReportIdMap = new Map()
+    const yearToExportMap = new Map()
     const currentYear = getCurrentYear()
     
     console.log('🔍 [HISTORY EXPORT] Analyzing existing exports for full-year coverage...')
     
+    // First pass: collect all valid exports by year, keeping only the most recent one per year
     existingExports
       .filter(exp => exp.status?.toLowerCase() === 'finished')
       .forEach(exp => {
         const yearResult = getYearFromTimeRange(exp.timeFrom, exp.timeTo)
         if (yearResult && !yearResult.isOutdated) {
-          // Special case: Don't mark current year as covered - always allow re-export for current year
-          if (yearResult.year !== currentYear) {
-            coveredYears.add(yearResult.year)
+          const existingExport = yearToExportMap.get(yearResult.year)
+          
+          if (!existingExport) {
+            // First export for this year
+            yearToExportMap.set(yearResult.year, exp)
             yearToReportIdMap.set(yearResult.year, exp.reportId)
-            console.log(`📋 [HISTORY EXPORT] Year ${yearResult.year} already covered by Report ID: ${exp.reportId}`)
           } else {
-            console.log(`📅 [HISTORY EXPORT] Current year ${yearResult.year} export exists but will allow re-export for latest data: ${exp.reportId}`)
+            // Compare end dates to keep the most recent one
+            const existingEndDate = new Date(existingExport.timeTo)
+            const newEndDate = new Date(exp.timeTo)
+            
+            if (newEndDate > existingEndDate) {
+              console.log(`🔄 [HISTORY EXPORT] Found newer export for year ${yearResult.year}: ${exp.reportId} (replacing ${existingExport.reportId})`)
+              yearToExportMap.set(yearResult.year, exp)
+              yearToReportIdMap.set(yearResult.year, exp.reportId)
+            }
           }
         } else if (yearResult && yearResult.isOutdated) {
           console.log(`⚠️ [HISTORY EXPORT] Year ${yearResult.year} export is outdated, will be re-exported: ${exp.reportId}`)
         }
       })
+    
+    // Second pass: mark years as covered (excluding current year for re-export)
+    yearToExportMap.forEach((exp, year) => {
+      if (year !== currentYear) {
+        coveredYears.add(year)
+        console.log(`📋 [HISTORY EXPORT] Year ${year} already covered by Report ID: ${yearToReportIdMap.get(year)} (${exp.timeTo})`)
+      } else {
+        console.log(`📅 [HISTORY EXPORT] Current year ${year} export exists but will allow re-export for latest data: ${yearToReportIdMap.get(year)} (${exp.timeTo})`)
+      }
+    })
     
     const years = Array.from(coveredYears).sort((a, b) => a - b)
     console.log(`📊 [HISTORY EXPORT] Full years already covered (non-outdated, excluding current year): ${years.join(', ') || 'none'}`)

@@ -107,25 +107,55 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
     setExportData(prev => {
       const yearMap = new Map()
       
-      // First, add existing exports to map (keyed by year)
+      // First, process existing exports
       prev.forEach(exp => {
         const year = getYearFromTimeRange(exp.timeFrom, exp.timeTo)
         if (year !== null) {
-          yearMap.set(year, exp)
+          const existing = yearMap.get(year)
+          if (!existing) {
+            yearMap.set(year, exp)
+          } else {
+            // Keep the one with the latest end date
+            const existingEndDate = new Date(existing.timeTo)
+            const newEndDate = new Date(exp.timeTo)
+            if (newEndDate > existingEndDate) {
+              yearMap.set(year, exp)
+            }
+          }
         }
       })
       
-      // Then, add/update with new exports (newer ones replace older ones for same year)
+      // Then, process new exports (newer ones replace older ones for same year)
       exportDataArray.forEach(newExport => {
         const year = getYearFromTimeRange(newExport.timeFrom, newExport.timeTo)
         if (year !== null) {
-          console.log(`📊 [DASHBOARD] Setting export for year ${year}: ${newExport.reportId}`)
-          yearMap.set(year, newExport)
+          const existing = yearMap.get(year)
+          if (!existing) {
+            console.log(`📊 [DASHBOARD] Adding export for year ${year}: ${newExport.reportId}`)
+            yearMap.set(year, newExport)
+          } else {
+            // Keep the one with the latest end date
+            const existingEndDate = new Date(existing.timeTo)
+            const newEndDate = new Date(newExport.timeTo)
+            if (newEndDate > existingEndDate) {
+              console.log(`📊 [DASHBOARD] Replacing export for year ${year}: ${existing.reportId} with newer ${newExport.reportId} (${newExport.timeTo} > ${existing.timeTo})`)
+              yearMap.set(year, newExport)
+            } else {
+              console.log(`📊 [DASHBOARD] Keeping existing export for year ${year}: ${existing.reportId} (${existing.timeTo} >= ${newExport.timeTo})`)
+            }
+          }
         }
       })
       
       const combined = Array.from(yearMap.values())
-      console.log('📊 [DASHBOARD] Updated export data list:', combined.length, 'total exports (max 1 per year)')
+      console.log('📊 [DASHBOARD] Updated export data list:', combined.length, 'total exports (exactly 1 per year, most recent only)')
+      
+      // Log final state
+      combined.forEach(exp => {
+        const year = getYearFromTimeRange(exp.timeFrom, exp.timeTo)
+        console.log(`📅 [DASHBOARD] Year ${year}: ${exp.reportId} (${exp.timeTo})`)
+      })
+      
       return combined
     })
 
@@ -522,7 +552,7 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
 
             {/* Transaction Analysis Section */}
             <div className="dashboard-section">
-              <TransactionAnalysis csvData={csvData} />
+              <TransactionAnalysis csvData={csvData} accountData={accountData} />
             </div>
 
             {/* Charts Section */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Trading212Service from '../services/Trading212Service'
 
 const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoaded }) => {
@@ -8,6 +8,9 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
   const [processingCsv, setProcessingCsv] = useState(false)
   const [csvStats, setCsvStats] = useState(null)
   const [pollingStatus, setPollingStatus] = useState({ active: false, message: '', reportId: null })
+  
+  // Use ref to track if we've already processed the current export data
+  const lastProcessedExportData = useRef(null)
 
   // Helper function to extract year from export
   const getYearFromExport = (exportItem) => {
@@ -54,45 +57,8 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
     }
   }
 
-  useEffect(() => {
-    // Use existing export data instead of making API calls
-    if (exportData.length > 0) {
-      console.log('📥 [HISTORY DOWNLOAD] Using existing export data, no API call needed:', exportData.length, 'exports')
-      
-      // Merge with existing exports but keep only one per year (latest)
-      setExports(prev => {
-        const mergedExports = [...prev]
-        
-        exportData.forEach(newExport => {
-          const existingIndex = mergedExports.findIndex(exp => {
-            const existingYear = getYearFromExport(exp)
-            const newYear = getYearFromExport(newExport)
-            return existingYear === newYear && existingYear !== null
-          })
-          
-          if (existingIndex !== -1) {
-            // Replace existing export for this year with newer one
-            console.log(`🔄 [HISTORY DOWNLOAD] Replacing existing export for year ${getYearFromExport(newExport)} with newer one: ${newExport.reportId}`)
-            mergedExports[existingIndex] = newExport
-          } else {
-            // Add new export for year that doesn't exist
-            console.log(`➕ [HISTORY DOWNLOAD] Adding new export for year ${getYearFromExport(newExport)}: ${newExport.reportId}`)
-            mergedExports.push(newExport)
-          }
-        })
-        
-        console.log(`📊 [HISTORY DOWNLOAD] Final exports count: ${mergedExports.length} (max 1 per year)`)
-        return mergedExports
-      })
-      
-      processCsvData(exportData)
-    } else if (reportIds.length > 0) {
-      console.log('📥 [HISTORY DOWNLOAD] Have report IDs but no export data, fetching from API:', reportIds)
-      fetchExportHistory()
-    }
-  }, [exportData, reportIds, apiKey])
-
-  const fetchExportHistory = async () => {
+  // Define fetchExportHistory before useEffect
+  const fetchExportHistory = useCallback(async () => {
     if (!apiKey) {
       setError('No API key provided')
       return
@@ -124,10 +90,17 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
     } finally {
       setLoading(false)
     }
-  }
+  }, [apiKey, reportIds])
 
+  // Define processCsvData without problematic dependencies that cause loops
+  const processCsvData = useCallback(async (exportsList) => {
+    // Prevent processing the same data multiple times
+    const exportDataSignature = JSON.stringify(exportsList.map(e => ({ id: e.reportId, timeTo: e.timeTo })))
+    if (lastProcessedExportData.current === exportDataSignature) {
+      console.log('⏭️ [HISTORY DOWNLOAD] Skipping CSV processing - same data already processed')
+      return
+    }
 
-  const processCsvData = async (exportsList) => {
     setProcessingCsv(true)
     setCsvStats(null)
 
@@ -219,13 +192,14 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
 
       console.log(`🎉 [HISTORY DOWNLOAD] CSV processing completed: ${totalTransactions} transactions from ${finishedExports.length} reports`)
       
+      // Mark this data as processed
+      lastProcessedExportData.current = exportDataSignature
+      
       // Pass CSV data to parent component for analysis
       if (onCsvDataLoaded && allCsvData.length > 0) {
         console.log(`📤 [HISTORY DOWNLOAD] Passing ${allCsvData.length} CSV records to parent for analysis`)
         onCsvDataLoaded(allCsvData)
       }
-      
-      // Don't update exports list here to avoid duplicates - it's already managed in useEffect
       
     } catch (error) {
       console.error('❌ [HISTORY DOWNLOAD] CSV processing failed:', error)
@@ -234,7 +208,81 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
       setProcessingCsv(false)
       setPollingStatus({ active: false, message: '', reportId: null })
     }
-  }
+  }, [reportIds, onCsvDataLoaded]) // Removed exportData dependency to prevent loops
+
+  useEffect(() => {
+    // Use existing export data instead of making API calls
+    if (exportData.length > 0) {
+      console.log('📥 [HISTORY DOWNLOAD] Using existing export data, no API call needed:', exportData.length, 'exports')
+      
+      // Process exports to keep only one per year (the most recent one)
+      setExports(prev => {
+        const yearExportMap = new Map()
+        
+        // First, process existing exports
+        prev.forEach(exp => {
+          const year = getYearFromExport(exp)
+          if (year !== null) {
+            const existing = yearExportMap.get(year)
+            if (!existing) {
+              yearExportMap.set(year, exp)
+            } else {
+              // Keep the one with the latest end date
+              const existingEndDate = new Date(existing.timeTo || existing.reportTimeTo || '1970-01-01')
+              const newEndDate = new Date(exp.timeTo || exp.reportTimeTo || '1970-01-01')
+              if (newEndDate > existingEndDate) {
+                yearExportMap.set(year, exp)
+              }
+            }
+          }
+        })
+        
+        // Then, process new export data
+        exportData.forEach(newExport => {
+          const year = getYearFromExport(newExport)
+          if (year !== null) {
+            const existing = yearExportMap.get(year)
+            if (!existing) {
+              console.log(`➕ [HISTORY DOWNLOAD] Adding new export for year ${year}: ${newExport.reportId}`)
+              yearExportMap.set(year, newExport)
+            } else {
+              // Keep the one with the latest end date
+              const existingEndDate = new Date(existing.timeTo || existing.reportTimeTo || '1970-01-01')
+              const newEndDate = new Date(newExport.timeTo || newExport.reportTimeTo || '1970-01-01')
+              if (newEndDate > existingEndDate) {
+                console.log(`🔄 [HISTORY DOWNLOAD] Replacing export for year ${year}: ${existing.reportId} with newer ${newExport.reportId} (${newExport.timeTo} > ${existing.timeTo})`)
+                yearExportMap.set(year, newExport)
+              } else {
+                console.log(`⚠️ [HISTORY DOWNLOAD] Keeping existing export for year ${year}: ${existing.reportId} (${existing.timeTo} >= ${newExport.timeTo})`)
+              }
+            }
+          }
+        })
+        
+        const finalExports = Array.from(yearExportMap.values())
+        console.log(`📊 [HISTORY DOWNLOAD] Final exports count: ${finalExports.length} (exactly 1 per year, most recent only)`)
+        
+        // Log final state
+        finalExports.forEach(exp => {
+          const year = getYearFromExport(exp)
+          console.log(`📅 [HISTORY DOWNLOAD] Year ${year}: ${exp.reportId} (${exp.timeTo})`)
+        })
+        
+        return finalExports
+      })
+      
+      // Only process CSV data if it's different from last time
+      const exportDataSignature = JSON.stringify(exportData.map(e => ({ id: e.reportId, timeTo: e.timeTo })))
+      if (lastProcessedExportData.current !== exportDataSignature) {
+        processCsvData(exportData)
+      } else {
+        console.log('⏭️ [HISTORY DOWNLOAD] Skipping CSV processing - same export data already processed')
+      }
+    } else if (reportIds.length > 0) {
+      console.log('📥 [HISTORY DOWNLOAD] Have report IDs but no export data, fetching from API:', reportIds)
+      fetchExportHistory()
+    }
+  }, [exportData, reportIds, apiKey, fetchExportHistory, processCsvData])
 
   const fetchCsvThroughProxy = async (downloadLink) => {
     try {
@@ -266,23 +314,100 @@ const HistoryDownload = ({ apiKey, reportIds = [], exportData = [], onCsvDataLoa
   }
 
   const parseCsv = (csvText) => {
+    console.log(`🔍 [HISTORY DOWNLOAD] Starting CSV parsing, text length: ${csvText.length} characters`)
+    
     const lines = csvText.split('\n').filter(line => line.trim())
-    if (lines.length < 2) return []
+    console.log(`📝 [HISTORY DOWNLOAD] Found ${lines.length} non-empty lines`)
+    
+    if (lines.length < 2) {
+      console.warn('⚠️ [HISTORY DOWNLOAD] CSV has less than 2 lines, returning empty array')
+      return []
+    }
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+    // Improved CSV parsing to handle quoted fields properly
+    const parseCSVLine = (line) => {
+      const result = []
+      let current = ''
+      let inQuotes = false
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i]
+        
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            // Handle escaped quotes
+            current += '"'
+            i++ // Skip next quote
+          } else {
+            // Toggle quote state
+            inQuotes = !inQuotes
+          }
+        } else if (char === ',' && !inQuotes) {
+          // End of field
+          result.push(current.trim())
+          current = ''
+        } else {
+          current += char
+        }
+      }
+      
+      // Add the last field
+      result.push(current.trim())
+      return result
+    }
+
+    const headers = parseCSVLine(lines[0])
+    console.log(`📋 [HISTORY DOWNLOAD] CSV headers (${headers.length}):`, headers)
+    
     const rows = []
+    let skippedRows = 0
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
-      if (values.length === headers.length) {
+      const line = lines[i].trim()
+      if (!line) {
+        skippedRows++
+        continue
+      }
+      
+      const values = parseCSVLine(line)
+      
+      // Be more flexible with column count - allow slight mismatches
+      if (Math.abs(values.length - headers.length) <= 2) {
         const row = {}
         headers.forEach((header, index) => {
-          row[header] = values[index]
+          row[header] = values[index] || '' // Use empty string if value is missing
         })
+        
+        // Log card debit transactions for debugging
+        if (row.Action && row.Action.toLowerCase() === 'card debit') {
+          console.log(`💳 [HISTORY DOWNLOAD] Card debit found - Line ${i + 1}:`, {
+            Action: row.Action,
+            Time: row.Time,
+            Total: row.Total,
+            'Merchant name': row['Merchant name'],
+            'Merchant category': row['Merchant category']
+          })
+        }
+        
         rows.push(row)
+      } else {
+        console.warn(`⚠️ [HISTORY DOWNLOAD] Skipping malformed line ${i + 1}: expected ${headers.length} columns, got ${values.length}`)
+        console.warn(`Line content: ${line.substring(0, 100)}...`)
+        skippedRows++
       }
     }
 
+    console.log(`✅ [HISTORY DOWNLOAD] CSV parsing completed: ${rows.length} valid rows, ${skippedRows} skipped`)
+    
+    // Count and log different action types for debugging
+    const actionCounts = {}
+    rows.forEach(row => {
+      const action = row.Action || 'Unknown'
+      actionCounts[action] = (actionCounts[action] || 0) + 1
+    })
+    
+    console.log(`📊 [HISTORY DOWNLOAD] Action type counts:`, actionCounts)
+    
     return rows
   }
 
