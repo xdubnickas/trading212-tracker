@@ -10,8 +10,8 @@
       "destination": "/api/proxy"
     },
     {
-      "source": "/csv-proxy/:path*",
-      "destination": "/api/csv-proxy?path=:path*"
+      "source": "/csv-proxy/(.*)",
+      "destination": "/api/csv-proxy"
     }
   ]
 }
