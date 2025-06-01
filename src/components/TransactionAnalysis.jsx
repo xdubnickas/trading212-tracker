@@ -27,6 +27,8 @@ ChartJS.register(
 const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
   const [showAllOutflows, setShowAllOutflows] = useState(false)
   const [showAllDeposits, setShowAllDeposits] = useState(false)
+  const [showFreeShares, setShowFreeShares] = useState(false)
+  const [includeFreeShares, setIncludeFreeShares] = useState(false) // Default: exclude free shares
 
   const analyzeTransactions = () => {
     if (!csvData || csvData.length === 0) {
@@ -35,8 +37,11 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
         totalCount: 0,
         actionGroups: {},
         totalDeposits: 0,
+        totalRegularDeposits: 0,
+        totalFreeSharesDeposits: 0,
         totalWithdrawals: 0,
         depositDetails: [],
+        freeSharesDetails: [],
         withdrawalDetails: [],
         depositsByMonth: {},
         dateRange: null,
@@ -60,8 +65,11 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
     // Group by transaction type (Action)
     const actionGroups = {}
     let totalDeposits = 0
+    let totalRegularDeposits = 0
+    let totalFreeSharesDeposits = 0
     let totalWithdrawals = 0
     const depositDetails = []
+    const freeSharesDetails = []
     const withdrawalDetails = []
     
     transactions.forEach((transaction, index) => {
@@ -75,18 +83,38 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
       // Calculate deposits and withdrawals
       if (action.toLowerCase() === 'deposit' || action.toLowerCase() === 'spending cashback') {
         const amount = parseFloat(transaction.Total) || 0
+        const notes = transaction.Notes || ''
+        
+        // Check if this is a Free Shares Promotion deposit
+        if (notes.toLowerCase().includes('free shares promotion')) {
+          totalFreeSharesDeposits += amount
+          freeSharesDetails.push({
+            date: transaction.Time,
+            amount: amount,
+            currency: transaction['Currency (Total)'] || 'EUR',
+            notes: notes,
+            id: transaction.ID,
+            type: 'Free Shares Promotion',
+            originalIndex: index
+          })
+          console.log(`🎁 [TRANSACTION ANALYSIS] Free Shares Promotion found: €${amount} - ${notes}`)
+        } else {
+          totalRegularDeposits += amount
+          depositDetails.push({
+            date: transaction.Time,
+            amount: amount,
+            currency: transaction['Currency (Total)'] || 'EUR',
+            notes: action.toLowerCase() === 'spending cashback' 
+              ? 'Cashback from card spending' 
+              : notes || '',
+            id: transaction.ID,
+            type: action.toLowerCase() === 'spending cashback' ? 'Cashback' : 'Deposit',
+            originalIndex: index
+          })
+        }
+        
+        // Total deposits includes both regular and free shares
         totalDeposits += amount
-        depositDetails.push({
-          date: transaction.Time,
-          amount: amount,
-          currency: transaction['Currency (Total)'] || 'EUR',
-          notes: action.toLowerCase() === 'spending cashback' 
-            ? 'Cashback from card spending' 
-            : transaction.Notes || '',
-          id: transaction.ID,
-          type: action.toLowerCase() === 'spending cashback' ? 'Cashback' : 'Deposit',
-          originalIndex: index
-        })
       } else if (action.toLowerCase() === 'withdrawal' || action.toLowerCase() === 'card debit') {
         const amount = parseFloat(transaction.Total) || 0
         const absoluteAmount = Math.abs(amount) // Make positive for display
@@ -118,17 +146,17 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
       }
     })
 
-    console.log('💰 [TRANSACTION ANALYSIS] Deposits:', totalDeposits, 'Withdrawals (including card debits):', totalWithdrawals)
+    console.log('💰 [TRANSACTION ANALYSIS] Regular Deposits:', totalRegularDeposits, 'Free Shares:', totalFreeSharesDeposits, 'Total Deposits:', totalDeposits)
+    console.log('💰 [TRANSACTION ANALYSIS] Withdrawals (including card debits):', totalWithdrawals)
+    console.log('🎁 [TRANSACTION ANALYSIS] Free Shares count:', freeSharesDetails.length)
     console.log('📋 [TRANSACTION ANALYSIS] Action groups:', Object.keys(actionGroups))
-    console.log('💳 [TRANSACTION ANALYSIS] Card debit count in withdrawalDetails:', withdrawalDetails.filter(w => w.type === 'Card Debit').length)
-    console.log('🏦 [TRANSACTION ANALYSIS] Withdrawal count in withdrawalDetails:', withdrawalDetails.filter(w => w.type === 'Withdrawal').length)
-    console.log('📊 [TRANSACTION ANALYSIS] Total withdrawalDetails:', withdrawalDetails.length)
 
-    // Sort deposits and withdrawals by date (newest first)
+    // Sort all arrays by date (newest first)
     depositDetails.sort((a, b) => new Date(b.date) - new Date(a.date))
+    freeSharesDetails.sort((a, b) => new Date(b.date) - new Date(a.date))
     withdrawalDetails.sort((a, b) => new Date(b.date) - new Date(a.date))
 
-    // Group deposits by MONTH (1-12) aggregated from ALL YEARS
+    // Group ONLY REGULAR deposits by MONTH (1-12) aggregated from ALL YEARS
     const depositsByMonth = {}
     for (let month = 1; month <= 12; month++) {
       depositsByMonth[month] = {
@@ -166,8 +194,11 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
       totalCount,
       actionGroups,
       totalDeposits,
+      totalRegularDeposits,
+      totalFreeSharesDeposits,
       totalWithdrawals,
       depositDetails,
+      freeSharesDetails,
       withdrawalDetails,
       depositsByMonth,
       dateRange,
@@ -274,7 +305,7 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
     }
   }
 
-  const barChartOptions = {
+  const getBarChartOptions = () => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -298,12 +329,13 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
         cornerRadius: 8,
         padding: 12,
         callbacks: {
-          label: function(context) {
-            const value = context.parsed.y
-            const month = context.label
-            const monthData = analysis.depositsByMonth[context.dataIndex + 1]
+          label: function(tooltipContext) {
+            const dataValue = tooltipContext.parsed.y
+            const monthLabel = tooltipContext.label
+            const monthIndex = tooltipContext.dataIndex + 1
+            const monthData = analysis.depositsByMonth[monthIndex]
             return [
-              `${month}: €${value.toFixed(2)}`,
+              `${monthLabel}: €${dataValue.toFixed(2)}`,
               `Deposits: ${monthData?.count || 0}`,
               `All years combined`
             ]
@@ -321,8 +353,8 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
           font: {
             size: 12,
           },
-          callback: function(value) {
-            return '€' + value.toFixed(0)
+          callback: function(tickValue) {
+            return '€' + tickValue.toFixed(0)
           },
         },
       },
@@ -337,10 +369,11 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
         },
       },
     },
-  }
+  })
 
   const monthlyDepositsChartData = prepareMonthlyDepositsChartData()
   const actionTypesData = prepareActionTypesData()
+  const barChartOptions = getBarChartOptions()
 
   return (
     <div className="transaction-analysis-container">
@@ -464,26 +497,38 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
             <h6 className="fw-medium mb-3">
               <i className="bi bi-arrow-down-up me-2"></i>
               Money Flow Analysis
+              {analysis.totalFreeSharesDeposits > 0 && (
+                <span className="badge bg-info ms-2">
+                  {includeFreeShares ? 'Including' : 'Excluding'} Free Shares
+                </span>
+              )}
             </h6>
             
             <div className="row g-3 mb-4">
-              <div className="col-md-3">
+              <div className="col-md-4">
                 <div className="card border-0 bg-success bg-opacity-10">
                   <div className="card-body text-center">
                     <h5 className="card-title text-success">
-                      +€{analysis.totalDeposits.toFixed(2)}
+                      +€{(() => {
+                        // Show combined deposits when including free shares
+                        return includeFreeShares ? 
+                          (analysis.totalRegularDeposits + analysis.totalFreeSharesDeposits).toFixed(2) : 
+                          analysis.totalRegularDeposits.toFixed(2)
+                      })()}
                     </h5>
                     <p className="card-text small mb-0">
-                      Total Deposits ({analysis.depositDetails.length})
+                      Your Deposits ({analysis.depositDetails.length}{includeFreeShares && analysis.freeSharesDetails.length > 0 ? ` + ${analysis.freeSharesDetails.length}` : ''})
                       <br />
-                        <small className="text-muted">Bank Deposits + Card Cashbacks</small>
+                      <small className="text-muted">
+                        Bank Deposits + Card Cashbacks{includeFreeShares && analysis.totalFreeSharesDeposits > 0 ? ' + Free Shares' : ''}
+                      </small>
                     </p>
                   </div>
                 </div>
               </div>
               
               {analysis.totalWithdrawals > 0 && (
-                <div className="col-md-3">
+                <div className="col-md-4">
                   <div className="card border-0 bg-danger bg-opacity-10">
                     <div className="card-body text-center">
                       <h5 className="card-title text-danger">
@@ -499,26 +544,38 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                 </div>
               )}
               
-              <div className="col-md-3">
-                <div className="card border-0 bg-info bg-opacity-10">
+              <div className="col-md-4">
+                <div className="card border-0 bg-warning bg-opacity-10">
                   <div className="card-body text-center">
-                    <h5 className="card-title text-info">
-                      €{(analysis.totalDeposits - analysis.totalWithdrawals).toFixed(2)}
+                    <h5 className="card-title text-warning">
+                      €{(() => {
+                        const depositsToUse = includeFreeShares ? 
+                          (analysis.totalRegularDeposits + analysis.totalFreeSharesDeposits) : 
+                          analysis.totalRegularDeposits
+                        return (depositsToUse - analysis.totalWithdrawals).toFixed(2)
+                      })()}
                     </h5>
                     <p className="card-text small mb-0">
-                      Net Money Flow
+                      Net Cash Flow
                       <br />
-                      <small className="text-muted">Deposits - All Outflows</small>
+                      <small className="text-muted">
+                        {includeFreeShares ? 'All Deposits' : 'Your Deposits'} - Outflows
+                      </small>
                     </p>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Simple Return Calculation */}
-              {accountData && accountData.total !== undefined && (
-                <div className="col-md-3">
+            {/* Simple Return Calculation - Only show one card now */}
+            {accountData && accountData.total !== undefined && (
+              <div className="row g-3 mb-4">
+                <div className="col-md-12">
                   {(() => {
-                    const netDeposits = analysis.totalDeposits - analysis.totalWithdrawals
+                    const depositsToUse = includeFreeShares ? 
+                      (analysis.totalRegularDeposits + analysis.totalFreeSharesDeposits) : 
+                      analysis.totalRegularDeposits
+                    const netDeposits = depositsToUse - analysis.totalWithdrawals
                     const currentTotal = accountData.total
                     const simpleReturn = currentTotal - netDeposits
                     const returnPercentage = netDeposits > 0 ? ((simpleReturn / netDeposits) * 100) : 0
@@ -534,7 +591,7 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                             Simple Return
                             <br />
                             <small className="text-muted">
-                              {isProfit ? '+' : ''}{returnPercentage.toFixed(2)}%
+                              {isProfit ? '+' : ''}{returnPercentage.toFixed(2)}% on {includeFreeShares ? 'all deposits' : 'your money'}
                             </small>
                           </p>
                         </div>
@@ -542,8 +599,8 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                     )
                   })()}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Return Calculation Details */}
             {accountData && accountData.total !== undefined && (
@@ -554,26 +611,40 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                 </h6>
                 <div className="row g-3">
                   <div className="col-md-6">
-                    <small className="text-muted">
-                      <strong>Formula:</strong> Current Total - Net Deposits = Simple Return
-                      <br />
-                      €{accountData.total.toFixed(2)} - €{(analysis.totalDeposits - analysis.totalWithdrawals).toFixed(2)} = 
-                      <span className={`fw-medium ${(accountData.total - (analysis.totalDeposits - analysis.totalWithdrawals)) >= 0 ? 'text-success' : 'text-danger'}`}>
-                        €{(accountData.total - (analysis.totalDeposits - analysis.totalWithdrawals)).toFixed(2)}
-                      </span>
-                    </small>
+                    {(() => {
+                      const depositsToUse = includeFreeShares ? 
+                        (analysis.totalRegularDeposits + analysis.totalFreeSharesDeposits) : 
+                        analysis.totalRegularDeposits
+                      const netDeposits = depositsToUse - analysis.totalWithdrawals
+                      const simpleReturn = accountData.total - netDeposits
+                      
+                      return (
+                        <small className="text-muted">
+                          <strong>Formula:</strong> Current Total - Net Deposits = Simple Return
+                          <br />
+                          €{accountData.total.toFixed(2)} - €{netDeposits.toFixed(2)} = 
+                          <span className={`fw-medium ${simpleReturn >= 0 ? 'text-success' : 'text-danger'}`}>
+                            €{simpleReturn.toFixed(2)}
+                          </span>
+                        </small>
+                      )
+                    })()}
                   </div>
                   <div className="col-md-6">
                     <small className="text-muted">
-                      <strong>Return %:</strong> (Simple Return ÷ Net Deposits) × 100
-                      <br />
-                      (€{(accountData.total - (analysis.totalDeposits - analysis.totalWithdrawals)).toFixed(2)} ÷ €{(analysis.totalDeposits - analysis.totalWithdrawals).toFixed(2)}) × 100 = 
-                      <span className={`fw-medium ${(accountData.total - (analysis.totalDeposits - analysis.totalWithdrawals)) >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {(analysis.totalDeposits - analysis.totalWithdrawals) > 0 ? 
-                          (((accountData.total - (analysis.totalDeposits - analysis.totalWithdrawals)) / (analysis.totalDeposits - analysis.totalWithdrawals)) * 100).toFixed(2) : 
-                          '0.00'
-                        }%
-                      </span>
+                      {includeFreeShares ? (
+                        <>
+                          <strong>Including Free Shares:</strong> €{analysis.totalFreeSharesDeposits.toFixed(2)} counted as deposits
+                          <br />
+                          This gives a more conservative return % (lower).
+                        </>
+                      ) : (
+                        <>
+                          <strong>Excluding Free Shares:</strong> €{analysis.totalFreeSharesDeposits.toFixed(2)} not counted
+                          <br />
+                          This shows return on your actual money only (higher %).
+                        </>
+                      )}
                     </small>
                   </div>
                 </div>
@@ -581,7 +652,7 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
             )}
 
             {/* Summary by Type Cards */}
-            {(analysis.depositDetails.length > 0 || analysis.withdrawalDetails.length > 0) && (
+            {(analysis.depositDetails.length > 0 || analysis.freeSharesDetails.length > 0 || analysis.withdrawalDetails.length > 0) && (
               <div className="row g-3 mb-4">
                 {(() => {
                   // Group deposits by type
@@ -594,6 +665,14 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                     depositsByType[type].count += 1
                     depositsByType[type].total += d.amount
                   })
+
+                  // Add Free Shares if any
+                  if (analysis.freeSharesDetails.length > 0) {
+                    depositsByType['Free Shares'] = {
+                      count: analysis.freeSharesDetails.length,
+                      total: analysis.totalFreeSharesDeposits
+                    }
+                  }
 
                   // Group withdrawals by type
                   const withdrawalsByType = {}
@@ -608,15 +687,17 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                   
                   return [
                     ...Object.entries(depositsByType).map(([type, data]) => (
-                      <div key={`deposit-${type}`} className="col-md-3">
+                      <div key={`deposit-${type}`} className="col-md-3" style={{ width: '20%' }}>
                         <div className="card border-0 bg-light">
                           <div className="card-body p-3 text-center">
-                            <h6 className="card-title text-success">
-                              <i className={`bi ${type === 'Cashback' ? 'bi-cash-coin' : 'bi-arrow-down-circle'} me-2`}></i>
+                            <h6 className={`card-title ${type === 'Free Shares' ? 'text-info' : 'text-success'}`}>
+                              <i className={`bi ${type === 'Cashback' ? 'bi-cash-coin' : type === 'Free Shares' ? 'bi-gift' : 'bi-arrow-down-circle'} me-2`}></i>
                               {type}
                             </h6>
                             <p className="card-text mb-1">
-                              <strong>+€{data.total.toFixed(2)}</strong>
+                              <strong className={type === 'Free Shares' ? 'text-info' : 'text-success'}>
+                                +€{data.total.toFixed(2)}
+                              </strong>
                             </p>
                             <small className="text-muted">
                               {data.count} transaction{data.count !== 1 ? 's' : ''}
@@ -626,7 +707,7 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                       </div>
                     )),
                     ...Object.entries(withdrawalsByType).map(([type, data]) => (
-                      <div key={`withdrawal-${type}`} className="col-md-3">
+                      <div key={`withdrawal-${type}`} className="col-md-3" style={{ width: '20%' }}>
                         <div className="card border-0 bg-light">
                           <div className="card-body p-3 text-center">
                             <h6 className="card-title text-danger">
@@ -645,6 +726,125 @@ const TransactionAnalysis = ({ csvData = [], accountData = null }) => {
                     ))
                   ]
                 })()}
+              </div>
+            )}
+
+            {/* Expandable Free Shares Table */}
+            {analysis.freeSharesDetails.length > 0 && (
+              <div className="mb-4">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h6 className="fw-medium mb-0">
+                    <i className="bi bi-gift me-2"></i>
+                    Free Shares Promotion ({analysis.freeSharesDetails.length})
+                  </h6>
+                  <div className="d-flex gap-2 align-items-center">
+                    {/* Free Shares Toggle */}
+                    <div className="form-check form-switch me-3">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="includeFreeShares"
+                        checked={includeFreeShares}
+                        onChange={(e) => setIncludeFreeShares(e.target.checked)}
+                      />
+                      <label className="form-check-label fw-medium" htmlFor="includeFreeShares">
+                        <small style={{ width: '140px', display: 'inline-block' }}>
+                          {includeFreeShares ? 'Count as Deposits' : 'Exclude from Returns'}
+                        </small>
+                      </label>
+                    </div>
+                    <button
+                      className="btn btn-outline-info btn-sm"
+                      onClick={() => setShowFreeShares(!showFreeShares)}
+                    >
+                      <i className={`bi ${showFreeShares ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
+                      {showFreeShares ? 'Hide Details' : 'Show Details'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Info about free shares calculation */}
+                <div className="alert alert-info mb-3">
+                  <small>
+                    <i className="bi bi-info-circle me-2"></i>
+                    <strong>Free Shares Impact:</strong> Found €{analysis.totalFreeSharesDeposits.toFixed(2)} in promotional deposits. 
+                    {includeFreeShares ? (
+                      <> These are <strong>counted as deposits</strong>, giving a more conservative return calculation.</>
+                    ) : (
+                      <> These are <strong>excluded from deposits</strong>, showing return on your actual money invested (higher %).</>
+                    )}
+                  </small>
+                </div>
+
+                {showFreeShares && (
+                  <div className="table-responsive">
+                    <table className="table table-sm table-hover">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Date</th>
+                          <th>Type</th>
+                          <th>Amount</th>
+                          <th>Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analysis.freeSharesDetails
+                          .sort((a, b) => new Date(b.date) - new Date(a.date))
+                          .map((freeShare, index) => (
+                          <tr key={index}>
+                            <td>
+                              <small>
+                                {new Date(freeShare.date).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </small>
+                            </td>
+                            <td>
+                              <span className="badge bg-info">
+                                Free Shares
+                              </span>
+                            </td>
+                            <td>
+                              <span className="text-info fw-medium">
+                                +€{freeShare.amount.toFixed(2)}
+                              </span>
+                              <br />
+                              <small className="text-muted">
+                                {freeShare.currency || 'EUR'}
+                              </small>
+                            </td>
+                            <td>
+                              <div className="text-wrap" style={{ maxWidth: '300px' }}>
+                                <small className="text-muted">
+                                  {freeShare.notes || 'Free Shares Promotion'}
+                                </small>
+                                {freeShare.id && (
+                                  <div>
+                                    <small className="text-muted opacity-75">
+                                      ID: {freeShare.id}
+                                    </small>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="table-light">
+                        <tr>
+                          <th colSpan="3">Total Free Shares:</th>
+                          <th className="text-info">
+                            +€{analysis.totalFreeSharesDeposits.toFixed(2)}
+                          </th>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 

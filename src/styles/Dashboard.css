@@ -902,3 +902,104 @@
   font-size: 0.875rem;
   color: var(--bs-secondary) !important;
 }
+
+/* Floating Section Navigation */
+.floating-section-navbar {
+  position: fixed;
+  top: -80px;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+  transform: translateY(-20px);
+  padding: 8px 0;
+}
+
+.floating-section-navbar.show {
+  top: 0;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.floating-section-navbar .btn-group {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.floating-section-navbar .btn {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.floating-section-navbar .btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.floating-section-navbar .btn:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.floating-section-navbar .btn i {
+  font-size: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .floating-section-navbar .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .floating-section-navbar .btn span {
+    display: none;
+  }
+  
+  .floating-section-navbar .btn i {
+    margin: 0;
+  }
+}
+
+@media (max-width: 576px) {
+  .floating-section-navbar {
+    padding: 8px 0;
+  }
+  
+  .floating-section-navbar .btn {
+    padding: 6px 10px;
+  }
+  
+  .floating-section-navbar .btn-group {
+    padding: 2px;
+  }
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Add some padding to sections for better scroll positioning */
+.dashboard-section,
+.dashboard-charts-grid {
+  scroll-margin-top: 100px;
+}

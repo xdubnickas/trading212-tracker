@@ -14,6 +14,7 @@ import Trading212Service from '../services/Trading212Service'
 import HistoryExport from './HistoryExport'
 import HistoryDownload from './HistoryDownload'
 import TransactionAnalysis from './TransactionAnalysis'
+import DividendAnalysis from './DividendAnalysis'
 import '../styles/Dashboard.css'
 
 // Register Chart.js components
@@ -34,6 +35,9 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
   const [exportedReportIds, setExportedReportIds] = useState([])
   const [exportData, setExportData] = useState([])
   const [csvData, setCsvData] = useState([])
+  const [showScrollNavbar, setShowScrollNavbar] = useState(false)
+  const [lastScrollY, setLastScrollY] = useState(0)
+  const [scrollDirection, setScrollDirection] = useState('up')
   const hasInitialized = useRef(false)
   const serviceRef = useRef(null)
 
@@ -396,6 +400,44 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
 
   const chartData = prepareChartData()
 
+  // Scroll detection for floating navbar
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY
+      
+      // Determine scroll direction
+      if (currentScrollY > lastScrollY) {
+        setScrollDirection('down')
+      } else {
+        setScrollDirection('up')
+      }
+      
+      // Show navbar when scrolling up and not at the top
+      if (scrollDirection === 'up' && currentScrollY > 200) {
+        setShowScrollNavbar(true)
+      } else if (scrollDirection === 'down' || currentScrollY <= 100) {
+        setShowScrollNavbar(false)
+      }
+      
+      setLastScrollY(currentScrollY)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [lastScrollY, scrollDirection])
+
+  // Smooth scroll to section
+  const scrollToSection = (sectionId) => {
+    const element = document.getElementById(sectionId)
+    if (element) {
+      const offsetTop = element.offsetTop - 100 // Account for navbar height
+      window.scrollTo({
+        top: offsetTop,
+        behavior: 'smooth'
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="dashboard-loading">
@@ -411,42 +453,95 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
 
   return (
     <div className="dashboard-container">
-      {/* Header */}
+      {/* Main Header */}
       <nav className="dashboard-navbar">
-        <div className="container">
+        <div className="container d-flex justify-content-between align-items-center">
           <span className="dashboard-brand">
-            <i className="bi bi-graph-up me-2"></i>
-            Trading212 Dashboard
+            <i className="bi bi-kanban me-2"></i>
+            Portfolio Analytics Dashboard
           </span>
-          <div className="dashboard-actions">
+          <div className="d-flex gap-3">
             <button 
-              className="dashboard-btn dashboard-btn-refresh"
+              className="btn btn-outline-light"
               onClick={handleRefresh}
+              title="Refresh account data from Trading212"
             >
-              <i className="bi bi-arrow-clockwise me-1"></i>
-              Refresh
+              <i className="bi bi-arrow-clockwise me-2"></i>
+              Refresh Data
             </button>
             <button 
-              className="dashboard-btn dashboard-btn-logout"
+              className="btn btn-outline-light"
               onClick={onLogout}
+              title="Logout and return to login screen"
             >
-              <i className="bi bi-box-arrow-left me-1"></i>
+              <i className="bi bi-box-arrow-right me-2"></i>
               Logout
             </button>
           </div>
         </div>
       </nav>
 
+      {/* Floating Section Navigation */}
+      <nav className={`floating-section-navbar ${showScrollNavbar ? 'show' : ''}`}>
+        <div className="container">
+          <div className="d-flex justify-content-center align-items-center">
+            <div className="btn-group" role="group">
+              <button 
+                className="btn btn-outline-light btn-sm"
+                onClick={() => scrollToSection('overview-section')}
+                title="Portfolio Overview"
+              >
+                <i className="bi bi-house me-1"></i>
+                Overview
+              </button>
+              <button 
+                className="btn btn-outline-light btn-sm"
+                onClick={() => scrollToSection('export-section')}
+                title="Export Trading History"
+              >
+                <i className="bi bi-download me-1"></i>
+                Export
+              </button>
+              <button 
+                className="btn btn-outline-light btn-sm"
+                onClick={() => scrollToSection('transaction-analysis-section')}
+                title="Transaction Analysis"
+              >
+                <i className="bi bi-graph-up me-1"></i>
+                Transactions
+              </button>
+              <button 
+                className="btn btn-outline-light btn-sm"
+                onClick={() => scrollToSection('dividend-analysis-section')}
+                title="Dividend Analysis"
+              >
+                <i className="bi bi-cash-coin me-1"></i>
+                Dividends
+              </button>
+              <button 
+                className="btn btn-outline-light btn-sm"
+                onClick={() => scrollToSection('charts-section')}
+                title="Trading Data Analysis"
+              >
+                <i className="bi bi-bar-chart me-1"></i>
+                Charts
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
       <div className="dashboard-content">
         {/* API Status */}
-        <div className="dashboard-status-card">
+        <div className="dashboard-status-card" id="overview-section">
           <div className="dashboard-status-success">
             <i className="bi bi-check-circle-fill me-2"></i>
             <div>
-              <strong>API Connected Successfully</strong>
+              <strong>Connected to Trading212 API</strong>
               <br />
               <small className="dashboard-status-text">
-                {initialAccountData ? 'Using cached data from verification' : 'Connected to Trading212 Demo API'}
+                {initialAccountData ? 'Using cached data from verification' : 'Real-time data from Trading212 Demo API'}
+                {' • '}Custom portfolio analytics dashboard
               </small>
             </div>
           </div>
@@ -533,7 +628,7 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
             </div>
 
             {/* History Export Section */}
-            <div className="dashboard-section">
+            <div className="dashboard-section" id="export-section">
               <HistoryExport 
                 apiKey={apiKey} 
                 onExportComplete={handleExportComplete}
@@ -551,12 +646,17 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
             </div>
 
             {/* Transaction Analysis Section */}
-            <div className="dashboard-section">
+            <div className="dashboard-section" id="transaction-analysis-section">
               <TransactionAnalysis csvData={csvData} accountData={accountData} />
             </div>
 
+            {/* Dividend Analysis Section */}
+            <div className="dashboard-section" id="dividend-analysis-section">
+              <DividendAnalysis csvData={csvData} />
+            </div>
+
             {/* Charts Section */}
-            <div className="dashboard-charts-grid">
+            <div className="dashboard-charts-grid" id="charts-section">
               {/* Portfolio Distribution */}
               <div className="dashboard-chart-card">
                 <div className="dashboard-chart-header">
