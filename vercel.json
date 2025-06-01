@@ -11,7 +11,7 @@
     },
     {
       "source": "/csv-proxy/:path*",
-      "destination": "/api/csv-proxy"
+      "destination": "/api/csv-proxy?path=:path*"
     }
   ]
 }
