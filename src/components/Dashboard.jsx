@@ -15,6 +15,7 @@ import HistoryExport from './HistoryExport'
 import HistoryDownload from './HistoryDownload'
 import TransactionAnalysis from './TransactionAnalysis'
 import DividendAnalysis from './DividendAnalysis'
+import InterestAnalysis from './InterestAnalysis'
 import '../styles/Dashboard.css'
 
 // Register Chart.js components
@@ -520,6 +521,14 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
               </button>
               <button 
                 className="btn btn-outline-light btn-sm"
+                onClick={() => scrollToSection('interest-analysis-section')}
+                title="Interest Analysis"
+              >
+                <i className="bi bi-percent me-1"></i>
+                Interest
+              </button>
+              <button 
+                className="btn btn-outline-light btn-sm"
                 onClick={() => scrollToSection('charts-section')}
                 title="Trading Data Analysis"
               >
@@ -653,6 +662,11 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
             {/* Dividend Analysis Section */}
             <div className="dashboard-section" id="dividend-analysis-section">
               <DividendAnalysis csvData={csvData} />
+            </div>
+
+            {/* Interest Analysis Section */}
+            <div className="dashboard-section" id="interest-analysis-section">
+              <InterestAnalysis csvData={csvData} />
             </div>
 
             {/* Charts Section */}
