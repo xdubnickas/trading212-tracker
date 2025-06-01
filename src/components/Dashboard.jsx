@@ -16,6 +16,7 @@ import HistoryDownload from './HistoryDownload'
 import TransactionAnalysis from './TransactionAnalysis'
 import DividendAnalysis from './DividendAnalysis'
 import InterestAnalysis from './InterestAnalysis'
+import StockTradingAnalysis from './StockTradingAnalysis'
 import '../styles/Dashboard.css'
 
 // Register Chart.js components
@@ -535,6 +536,14 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
                 <i className="bi bi-bar-chart me-1"></i>
                 Charts
               </button>
+              <button 
+                className="btn btn-outline-light btn-sm"
+                onClick={() => scrollToSection('stock-trading-section')}
+                title="Stock Trading Analysis"
+              >
+                <i className="bi bi-graph-up-arrow me-1"></i>
+                Trading
+              </button>
             </div>
           </div>
         </div>
@@ -712,6 +721,11 @@ const Dashboard = ({ apiKey, onLogout, initialAccountData = null }) => {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Stock Trading Analysis Section */}
+            <div className="dashboard-section" id="stock-trading-section">
+              <StockTradingAnalysis csvData={csvData} />
             </div>
 
             {/* Last Updated Info */}

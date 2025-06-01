@@ -1041,3 +1041,41 @@ html {
   font-size: 0.875rem;
   margin-bottom: 0;
 }
+
+/* Stock Trading Analysis Component */
+.stock-trading-analysis-container {
+  width: 100%;
+}
+
+.stock-trading-analysis-card {
+  background: white;
+  border-radius: 1.25rem;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stock-trading-analysis-header {
+  margin-bottom: 2rem;
+  text-align: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.stock-trading-analysis-title {
+  color: #0f172a;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.stock-trading-analysis-subtitle {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin-bottom: 0;
+}
